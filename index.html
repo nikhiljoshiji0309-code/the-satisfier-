@@ -1,9 +1,6 @@
 <think>
-First, the user wants the complete code incorporating three specific modifications:
+First, the user wants the complete code with three specific modifications:
 
-
-## Addressing User Code Modifications  
-- The user requested complete code with three specific modifications.
 </think>```html
 <!DOCTYPE html>
 <html lang="en">
@@ -32,7 +29,7 @@ First, the user wants the complete code incorporating three specific modificatio
 
     <div id="ui">
         <h2 id="themeLabel">THEME: SPACE</h2>
-        <p style="font-size: 11px; color: #00ffcc;">CLICK FOR SOUND & GRAVITY VORTEX</p>
+        <p style="font-size: 11px; color: #00ffcc;">CLICK FOR SOUND & GRAVITY VORTEX | USE ARROW KEYS TO SWITCH THEMES</p>
     </div>
 
     <div class="copyright">ENGINE BY: nikjosh0309</div>
@@ -120,6 +117,21 @@ First, the user wants the complete code incorporating three specific modificatio
         e.preventDefault();
     });
 
+    // Keyboard Controls
+    window.addEventListener('keydown', (e) => {
+        const themes = ['space', 'lava', 'electric', 'ghost'];
+        const index = themes.indexOf(currentTheme);
+        if (e.key === 'ArrowRight') {
+            const next = themes[(index + 1) % themes.length];
+            changeTheme(next, document.querySelector(`button[onclick*="changeTheme('${next}'"]`));
+        } else if (e.key === 'ArrowLeft') {
+            const prev = themes[(index - 1 + themes.length) % themes.length];
+            changeTheme(prev, document.querySelector(`button[onclick*="changeTheme('${prev}'"]`));
+        } else if (e.key === 'r' || e.key === 'R') {
+            particles = []; playSound(300, 'sine', 0.1, 0.3);
+        }
+    });
+
     function changeTheme(t, btn) {
         currentTheme = t;
         document.getElementById('themeLabel').innerText = "THEME: " + t.toUpperCase();
@@ -174,6 +186,13 @@ First, the user wants the complete code incorporating three specific modificatio
                 let dist = Math.sqrt(dx*dx + dy*dy) || 1;
                 this.vx += (dx / dist) * 0.5 + (dy / dist) * 2; // Whirlpool
                 this.vy += (dy / dist) * 0.5 - (dx / dist) * 2;
+            }
+
+            // Particle Gravity and Wind Effects
+            switch(currentTheme) {
+                case 'lava': this.vy += 0.1; break;  // Gravity pulls down
+                case 'ghost': this.vx += Math.sin(Date.now() * 0.001) * 0.05; break;  // Wind oscillation
+                case 'electric': this.vx += Math.random() * 0.2 - 0.1; this.vy += Math.random() * 0.2 - 0.1; break;  // Random jitter
             }
 
             this.x += this.vx;
@@ -265,7 +284,15 @@ First, the user wants the complete code incorporating three specific modificatio
     }
 
     function animate() {
-        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        // Dynamic Background Gradient
+        let gradient;
+        switch(currentTheme) {
+            case 'space': gradient = ctx.createLinearGradient(0, 0, 0, canvas.height); gradient.addColorStop(0, '#000011'); gradient.addColorStop(1, '#001122'); break;
+            case 'lava': gradient = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width); gradient.addColorStop(0, '#ff4500'); gradient.addColorStop(1, '#000000'); break;
+            case 'electric': gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height); gradient.addColorStop(0, '#000033'); gradient.addColorStop(1, '#003366'); break;
+            case 'ghost': gradient = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width); gradient.addColorStop(0, '#ffffff'); gradient.addColorStop(1, '#cccccc'); break;
+        }
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Frame skipping for performance
