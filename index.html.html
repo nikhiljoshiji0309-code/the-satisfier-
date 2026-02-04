@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Nikjosh0309 - Living Universe</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #050505; font-family: 'Arial Black', sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; z-index: 100; }
+        .copyright {
+            position: absolute; bottom: 10px; right: 15px;
+            color: #00ffcc; font-size: 11px; opacity: 0.5;
+            letter-spacing: 2px; text-transform: uppercase;
+        }
+        .menu { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 100; }
+        button { 
+            padding: 10px 15px; border: 1px solid #00ffcc; background: rgba(0,0,0,0.8); color: white; 
+            cursor: pointer; border-radius: 5px; font-size: 11px; transition: 0.2s;
+        }
+        button:hover { background: #00ffcc; color: #000; }
+        .active { background: #00ffcc; color: #000; box-shadow: 0 0 20px rgba(0,255,204,0.5); }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h2 id="themeLabel">THEME: SPACE</h2>
+        <p style="font-size: 11px; color: #00ffcc;">CLICK FOR SOUND & GRAVITY VORTEX</p>
+    </div>
+
+    <div class="copyright">ENGINE BY: nikjosh0309</div>
+
+    <div class="menu">
+        <button onclick="changeTheme('space', this)" class="active">SPACE</button>
+        <button onclick="changeTheme('lava', this)">LAVA</button>
+        <button onclick="changeTheme('electric', this)">ELECTRIC</button>
+        <button onclick="changeTheme('ghost', this)">GHOST</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let currentTheme = 'space';
+    let isPressing = false;
+    const mouse = { x: window.innerWidth/2, y: window.innerHeight/2 };
+
+    // AUDIO SYSTEM
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+
+    function initAudio() {
+        if (!audioCtx) audioCtx = new AudioCtx();
+    }
+
+    function playSound(freq, type, vol, duration) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    window.addEventListener('mousedown', () => {
+        initAudio();
+        isPressing = true;
+        playSound(100, 'sawtooth', 0.1, 0.5); // Deep bass on click
+    });
+    window.addEventListener('mouseup', () => isPressing = false);
+    window.addEventListener('mousemove', (e) => {
+        mouse.x = e.x; mouse.y = e.y;
+        if (particles.length < 200) {
+            spawn(e.x, e.y);
+            if (Math.random() > 0.95) playSound(400 + Math.random() * 1000, 'sine', 0.02, 0.1);
+        }
+    });
+
+    function changeTheme(t, btn) {
+        currentTheme = t;
+        document.getElementById('themeLabel').innerText = "THEME: " + t.toUpperCase();
+        document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        particles = [];
+        playSound(200, 'square', 0.1, 0.2);
+    }
+
+    class Particle {
+        constructor(x, y, isChild = false) {
+            this.x = x;
+            this.y = y;
+            this.life = 1.0;
+            this.isChild = isChild;
+            this.init();
+        }
+
+        init() {
+            this.decay = this.isChild ? 0.05 : Math.random() * 0.01 + 0.005;
+            this.size = this.isChild ? Math.random() * 3 : Math.random() * 5 + 2;
+            
+            switch(currentTheme) {
+                case 'space':
+                    this.vx = Math.random() * 4 - 2;
+                    this.vy = Math.random() * 4 - 2;
+                    this.color = `hsl(${Math.random() * 360}, 100%, 70%)`;
+                    break;
+                case 'lava':
+                    this.vx = Math.random() * 2 - 1;
+                    this.vy = Math.random() * -2 - 1;
+                    this.color = `rgb(255, ${Math.random() * 100}, 0)`;
+                    break;
+                case 'electric':
+                    this.vx = Math.random() * 10 - 5;
+                    this.vy = Math.random() * 10 - 5;
+                    this.color = "#00ffff";
+                    break;
+                case 'ghost':
+                    this.vx = Math.random() * 0.4 - 0.2;
+                    this.vy = Math.random() * -1;
+                    this.color = "rgba(255, 255, 255, 0.3)";
+                    this.size *= 3;
+                    break;
+            }
+        }
+
+        update() {
+            if (isPressing && !this.isChild) {
+                let dx = mouse.x - this.x;
+                let dy = mouse.y - this.y;
+                let dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                this.vx += (dx / dist) * 0.5 + (dy / dist) * 2; // Whirlpool
+                this.vy += (dy / dist) * 0.5 - (dx / dist) * 2;
+            }
+
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life -= this.decay;
+        }
+
+        draw() {
+            ctx.globalAlpha = this.life;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            if (currentTheme === 'space') {
+                this.drawStar(this.x, this.y, 5, this.size, this.size/2);
+            } else if (currentTheme === 'ghost') {
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "red"; // Eyes
+                ctx.fillRect(this.x-4, this.y-2, 2, 2);
+                ctx.fillRect(this.x+2, this.y-2, 2, 2);
+            } else {
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        drawStar(cx, cy, spikes, outer, inner) {
+            let rot = Math.PI/2*3, x=cx, y=cy, step=Math.PI/spikes;
+            ctx.beginPath(); ctx.moveTo(cx, cy-outer);
+            for(let i=0;i<spikes;i++){
+                x=cx+Math.cos(rot)*outer; y=cy+Math.sin(rot)*outer; ctx.lineTo(x,y); rot+=step;
+                x=cx+Math.cos(rot)*inner; y=cy+Math.sin(rot)*inner; ctx.lineTo(x,y); rot+=step;
+            }
+            ctx.closePath(); ctx.fill();
+        }
+    }
+
+    function spawn(x, y) {
+        particles.push(new Particle(x, y));
+    }
+
+    function drawNeural() {
+        if (currentTheme !== 'space' && currentTheme !== 'electric') return;
+        for (let i = 0; i < particles.length; i++) {
+            for (let j = i + 1; j < particles.length; j++) {
+                let dx = particles[i].x - particles[j].x;
+                let dy = particles[i].y - particles[j].y;
+                let d = Math.sqrt(dx*dx + dy*dy);
+                if (d < 70) {
+                    ctx.strokeStyle = particles[i].color;
+                    ctx.globalAlpha = (1 - d/70) * 0.2;
+                    ctx.beginPath();
+                    ctx.moveTo(particles[i].x, particles[i].y);
+                    ctx.lineTo(particles[j].x, particles[j].y);
+                    ctx.stroke();
+                }
+            }
+        }
+    }
+
+    function animate() {
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        drawNeural();
+
+        for (let i = 0; i < particles.length; i++) {
+            particles[i].update();
+            particles[i].draw();
+            
+            // EXPLOSIVE DEATH LOGIC
+            if (particles[i].life <= 0) {
+                if (!particles[i].isChild && currentTheme === 'electric') {
+                    for(let k=0; k<3; k++) particles.push(new Particle(particles[i].x, particles[i].y, true));
+                }
+                particles.splice(i, 1);
+                i--;
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+</script>
+</body>
+</html>
