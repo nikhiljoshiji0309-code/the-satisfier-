@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>Nikjosh0309 - Living Universe</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="google-site-verification" content="YI-0XbQQqchFX0cKvdB8xdomfpAQbpe3GeV8CzLUgOI" />
 
 <style>
 html,body{
@@ -130,7 +129,7 @@ function applyShake(){
     }
 }
 
-/* VISUAL MODE (UNCHANGED) */
+/* VISUAL MODE */
 let particles=[];
 let currentTheme="space";
 let gameMode=false;
@@ -142,15 +141,20 @@ const themeColors={
     ghost:"#bbbbff"
 };
 
+/* PARTICLE (ONLY CHANGE IS FADE + LIFE) */
 class Particle{
     constructor(x,y){
         this.x=x;this.y=y;
         this.size=Math.random()*6+4;
         this.vx=Math.random()*4-2;
         this.vy=Math.random()*4-2;
+
+        this.life=1;
+        this.decay=Math.random()*0.005+0.002;
     }
     update(){
         if(gameMode) return;
+
         let dx=mouse.x-this.x;
         let dy=mouse.y-this.y;
         let d=Math.hypot(dx,dy)||1;
@@ -165,8 +169,11 @@ class Particle{
         if(this.x>canvas.width)this.x=0;
         if(this.y<0)this.y=canvas.height;
         if(this.y>canvas.height)this.y=0;
+
+        this.life-=this.decay;
     }
     draw(){
+        ctx.globalAlpha=Math.max(this.life,0);
         ctx.shadowBlur=20;
         ctx.shadowColor=themeColors[currentTheme];
         ctx.fillStyle=themeColors[currentTheme];
@@ -174,6 +181,7 @@ class Particle{
         ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
         ctx.fill();
         ctx.shadowBlur=0;
+        ctx.globalAlpha=1;
     }
 }
 
@@ -221,7 +229,6 @@ class Enemy{
             if(sd<140){
                 this.x+=(sx/sd)*6;
                 this.y+=(sy/sd)*6;
-
                 if(this.boss){
                     shake=12;
                     this.rage=1;
@@ -232,7 +239,7 @@ class Enemy{
         if(this.boss && this.rage>0){
             this.speed=this.baseSpeed*2;
             this.rage-=0.02;
-        } else {
+        }else{
             this.speed=this.baseSpeed;
         }
     }
@@ -299,6 +306,7 @@ function animate(){
 
     if(!gameMode){
         if(Math.random()<.3)particles.push(new Particle(mouse.x,mouse.y));
+        particles = particles.filter(p=>p.life>0);
         particles.forEach(p=>{p.update();p.draw()});
     }
 
