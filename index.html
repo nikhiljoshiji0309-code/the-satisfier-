@@ -48,6 +48,19 @@ button:hover, .active {
     color: black;
 }
 
+.gameOverlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    background: rgba(0,0,0,0.8);
+    color: #00ffcc;
+    z-index: 200;
+    text-align: center;
+}
+
 .copyright {
     position: absolute;
     bottom: 10px;
@@ -64,18 +77,24 @@ button:hover, .active {
 
 <div id="ui">
     <h2 id="themeLabel">THEME: SPACE</h2>
-    <p style="font-size:11px;color:#00ffcc">CLICK / TOUCH FOR VORTEX</p>
+    <p style="font-size:11px;color:#00ffcc">MOVE • CLICK = SHOCKWAVE</p>
 </div>
-
-<div class="copyright">ENGINE BY: nikjosh0309</div>
 
 <div class="menu">
     <button onclick="changeTheme('space',this)" class="active">SPACE</button>
     <button onclick="changeTheme('lava',this)">LAVA</button>
     <button onclick="changeTheme('electric',this)">ELECTRIC</button>
     <button onclick="changeTheme('ghost',this)">GHOST</button>
-    <button onclick="particles=[]">RESET</button>
+    <button onclick="startGame()">GAME</button>
 </div>
+
+<div class="gameOverlay" id="gameOver">
+    <h1>⚡ GAME OVER</h1>
+    <p id="scoreText"></p>
+    <button onclick="startGame()">RESTART</button>
+</div>
+
+<div class="copyright">ENGINE BY: nikjosh0309</div>
 
 <canvas id="canvas"></canvas>
 
@@ -88,80 +107,66 @@ canvas.height = innerHeight;
 let particles = [];
 let currentTheme = "space";
 let isPressing = false;
-const mouse = { x: innerWidth/2, y: innerHeight/2 };
+let mouse = { x: innerWidth/2, y: innerHeight/2 };
 
-// FPS COUNTER ✨
-let frames = 0, fps = 0;
-setInterval(() => {
-    fps = frames * 2;
-    frames = 0;
-    document.getElementById("themeLabel").innerText =
-        `THEME: ${currentTheme.toUpperCase()} | FPS: ${fps}`;
-}, 500);
+// GAME STATE
+let gameMode = false;
+let player, score = 0, spawnRate = 60;
+
+class Player {
+    constructor() {
+        this.x = mouse.x;
+        this.y = mouse.y;
+        this.radius = 14;
+    }
+    update() {
+        this.x += (mouse.x - this.x) * 0.15;
+        this.y += (mouse.y - this.y) * 0.15;
+    }
+    draw() {
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = "#00ffff";
+        ctx.fillStyle = "#00ffff";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
 
 class Particle {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.life = 1;
-        this.size = Math.random() * 4 + 3;
-
-        this.vx = Math.random() * 6 - 3;
-        this.vy = Math.random() * 6 - 3;
-
-        this.zapTimer = Math.random() * 10;
-        this.setTheme();
-    }
-
-    setTheme() {
-        if (currentTheme === "space")
-            this.color = `hsl(${Math.random() * 360},100%,70%)`;
-        if (currentTheme === "lava")
-            this.color = "orange";
-        if (currentTheme === "electric")
-            this.color = "#00ffff";
-        if (currentTheme === "ghost")
-            this.color = "rgba(255,255,255,0.3)";
+        this.size = Math.random()*6+4;
+        this.vx = Math.random()*4-2;
+        this.vy = Math.random()*4-2;
     }
 
     update() {
-        // Vortex (weaker for electric)
+        if (gameMode) {
+            // ENEMY AI 🧠
+            let dx = player.x - this.x;
+            let dy = player.y - this.y;
+            let d = Math.hypot(dx, dy) || 1;
+            this.vx += (dx/d)*0.15;
+            this.vy += (dy/d)*0.15;
+        }
+
         if (isPressing) {
-            let dx = mouse.x - this.x;
-            let dy = mouse.y - this.y;
-            let dist = Math.hypot(dx, dy) || 1;
-
-            let strength = currentTheme === "electric" ? 0.25 : 0.6;
-            this.vx += (dx / dist) * strength;
-            this.vy += (dy / dist) * strength;
-        }
-
-        // THEME PHYSICS ⚡
-        if (currentTheme === "electric") {
-            // jitter + crackle
-            this.vx += Math.random() * 1.2 - 0.6;
-            this.vy += Math.random() * 1.2 - 0.6;
-
-            // zig-zag oscillation
-            this.zapTimer += 0.3;
-            this.vx += Math.sin(this.zapTimer) * 0.5;
-            this.vy += Math.cos(this.zapTimer) * 0.5;
-        }
-
-        if (currentTheme === "lava") {
-            this.vy += 0.15;
-        }
-
-        if (currentTheme === "ghost") {
-            this.vx += Math.sin(Date.now() * 0.002) * 0.05;
-            this.vy -= 0.02;
+            // SHOCKWAVE
+            let dx = this.x - mouse.x;
+            let dy = this.y - mouse.y;
+            let d = Math.hypot(dx, dy) || 1;
+            if (d < 120) {
+                this.vx += (dx/d)*3;
+                this.vy += (dy/d)*3;
+            }
         }
 
         this.x += this.vx;
         this.y += this.vy;
-        this.life -= 0.007;
 
-        // Wrap
         if (this.x < 0) this.x = canvas.width;
         if (this.x > canvas.width) this.x = 0;
         if (this.y < 0) this.y = canvas.height;
@@ -169,72 +174,89 @@ class Particle {
     }
 
     draw() {
-        ctx.globalAlpha = this.life;
-
-        if (currentTheme === "lava") {
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y - this.size);
-            ctx.lineTo(this.x - this.size, this.y + this.size);
-            ctx.lineTo(this.x + this.size, this.y + this.size);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        else if (currentTheme === "electric") {
-            ctx.shadowBlur = 25;
-            ctx.shadowColor = this.color;
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-        }
-
-        else if (currentTheme === "ghost") {
-            ctx.shadowBlur = 30;
-            ctx.shadowColor = "white";
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-        }
-
-        else {
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "#00ffff";
+        ctx.fillStyle = "#00ffff";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
     }
 }
 
-function changeTheme(t, btn) {
-    currentTheme = t;
-    document.querySelectorAll("button").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+function startGame() {
+    gameMode = true;
+    currentTheme = "electric";
     particles = [];
+    player = new Player();
+    score = 0;
+    spawnRate = 60;
+    document.getElementById("gameOver").style.display = "none";
 }
 
-addEventListener("mousedown", () => isPressing = true);
-addEventListener("mouseup", () => isPressing = false);
+function endGame() {
+    gameMode = false;
+    document.getElementById("scoreText").innerText =
+        `You survived ${Math.floor(score)} seconds`;
+    document.getElementById("gameOver").style.display = "flex";
+}
+
+function changeTheme(t, btn) {
+    gameMode = false;
+    currentTheme = t;
+    particles = [];
+    document.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+}
+
 addEventListener("mousemove", e => {
     mouse.x = e.x;
     mouse.y = e.y;
-    if (particles.length < 300) particles.push(new Particle(e.x, e.y));
 });
 
-function animate() {
-    frames++;
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+addEventListener("mousedown", () => isPressing = true);
+addEventListener("mouseup", () => isPressing = false);
 
-    particles.forEach((p, i) => {
-        p.update();
-        p.draw();
-        if (p.life <= 0) particles.splice(i, 1);
-    });
+function animate() {
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    if (gameMode) {
+        score += 0.016;
+
+        if (Math.random() < 1/spawnRate) {
+            particles.push(new Particle(
+                Math.random()*canvas.width,
+                Math.random()*canvas.height
+            ));
+            spawnRate = Math.max(15, spawnRate - 0.5); // difficulty ↑
+        }
+
+        player.update();
+        player.draw();
+
+        particles.forEach((p,i)=>{
+            p.update();
+            p.draw();
+
+            // COLLISION ☠️
+            let dx = p.x - player.x;
+            let dy = p.y - player.y;
+            if (Math.hypot(dx,dy) < p.size + player.radius) {
+                endGame();
+            }
+        });
+
+        ctx.fillStyle = "#00ffcc";
+        ctx.fillText(`TIME: ${Math.floor(score)}`, 20, 80);
+    }
+
+    else {
+        particles.forEach(p=>{
+            p.update();
+            p.draw();
+        });
+    }
 
     requestAnimationFrame(animate);
 }
