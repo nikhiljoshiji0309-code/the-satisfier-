@@ -6,26 +6,34 @@
 
 <style>
 body, html {
-    margin: 0; padding: 0;
-    width: 100%; height: 100%;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
     background: #050505;
     font-family: 'Arial Black', sans-serif;
 }
 canvas { display: block; }
+
 #ui {
     position: absolute;
-    top: 20px; left: 20px;
+    top: 20px;
+    left: 20px;
     color: white;
     z-index: 100;
 }
+
 .menu {
     position: absolute;
-    bottom: 40px; left: 50%;
+    bottom: 40px;
+    left: 50%;
     transform: translateX(-50%);
-    display: flex; gap: 8px;
+    display: flex;
+    gap: 8px;
     z-index: 100;
 }
+
 button {
     padding: 12px 18px;
     border: 1px solid #00ffcc;
@@ -34,13 +42,16 @@ button {
     cursor: pointer;
     border-radius: 5px;
 }
+
 button:hover, .active {
     background: #00ffcc;
     color: black;
 }
+
 .copyright {
     position: absolute;
-    bottom: 10px; right: 15px;
+    bottom: 10px;
+    right: 15px;
     font-size: 11px;
     opacity: 0.5;
     letter-spacing: 2px;
@@ -82,117 +93,149 @@ const mouse = { x: innerWidth/2, y: innerHeight/2 };
 // FPS COUNTER ✨
 let frames = 0, fps = 0;
 setInterval(() => {
-    fps = frames;
+    fps = frames * 2;
     frames = 0;
     document.getElementById("themeLabel").innerText =
         `THEME: ${currentTheme.toUpperCase()} | FPS: ${fps}`;
 }, 500);
 
 class Particle {
-    constructor(x,y){
-        this.x=x; this.y=y;
-        this.life=1;
-        this.size=Math.random()*5+3;
-        this.vx=Math.random()*4-2;
-        this.vy=Math.random()*4-2;
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.life = 1;
+        this.size = Math.random() * 4 + 3;
+
+        this.vx = Math.random() * 6 - 3;
+        this.vy = Math.random() * 6 - 3;
+
+        this.zapTimer = Math.random() * 10;
         this.setTheme();
     }
 
-    setTheme(){
-        if(currentTheme==="lava") this.color="orange";
-        if(currentTheme==="electric") this.color="#00ffff";
-        if(currentTheme==="ghost") this.color="rgba(255,255,255,0.3)";
-        if(currentTheme==="space") this.color=`hsl(${Math.random()*360},100%,70%)`;
+    setTheme() {
+        if (currentTheme === "space")
+            this.color = `hsl(${Math.random() * 360},100%,70%)`;
+        if (currentTheme === "lava")
+            this.color = "orange";
+        if (currentTheme === "electric")
+            this.color = "#00ffff";
+        if (currentTheme === "ghost")
+            this.color = "rgba(255,255,255,0.3)";
     }
 
-    update(){
-        if(isPressing){
-            let dx=mouse.x-this.x;
-            let dy=mouse.y-this.y;
-            let dist=Math.hypot(dx,dy)||1;
+    update() {
+        // Vortex (weaker for electric)
+        if (isPressing) {
+            let dx = mouse.x - this.x;
+            let dy = mouse.y - this.y;
+            let dist = Math.hypot(dx, dy) || 1;
 
-            // FIXED VORTEX LOGIC ⚠️
-            this.vx += (dx/dist)*0.6;
-            this.vy += (dy/dist)*0.6;
+            let strength = currentTheme === "electric" ? 0.25 : 0.6;
+            this.vx += (dx / dist) * strength;
+            this.vy += (dy / dist) * strength;
         }
 
-        this.x+=this.vx;
-        this.y+=this.vy;
-        this.life-=0.008;
+        // THEME PHYSICS ⚡
+        if (currentTheme === "electric") {
+            // jitter + crackle
+            this.vx += Math.random() * 1.2 - 0.6;
+            this.vy += Math.random() * 1.2 - 0.6;
 
-        if(this.x<0) this.x=canvas.width;
-        if(this.x>canvas.width) this.x=0;
-        if(this.y<0) this.y=canvas.height;
-        if(this.y>canvas.height) this.y=0;
+            // zig-zag oscillation
+            this.zapTimer += 0.3;
+            this.vx += Math.sin(this.zapTimer) * 0.5;
+            this.vy += Math.cos(this.zapTimer) * 0.5;
+        }
+
+        if (currentTheme === "lava") {
+            this.vy += 0.15;
+        }
+
+        if (currentTheme === "ghost") {
+            this.vx += Math.sin(Date.now() * 0.002) * 0.05;
+            this.vy -= 0.02;
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= 0.007;
+
+        // Wrap
+        if (this.x < 0) this.x = canvas.width;
+        if (this.x > canvas.width) this.x = 0;
+        if (this.y < 0) this.y = canvas.height;
+        if (this.y > canvas.height) this.y = 0;
     }
 
-    draw(){
-        ctx.globalAlpha=this.life;
+    draw() {
+        ctx.globalAlpha = this.life;
 
-        // THEME IDENTITY 🎨
-        if(currentTheme==="lava"){
-            ctx.fillStyle=this.color;
+        if (currentTheme === "lava") {
+            ctx.fillStyle = this.color;
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y-this.size);
-            ctx.lineTo(this.x-this.size, this.y+this.size);
-            ctx.lineTo(this.x+this.size, this.y+this.size);
+            ctx.moveTo(this.x, this.y - this.size);
+            ctx.lineTo(this.x - this.size, this.y + this.size);
+            ctx.lineTo(this.x + this.size, this.y + this.size);
             ctx.closePath();
             ctx.fill();
         }
 
-        else if(currentTheme==="electric"){
-            ctx.shadowBlur=20;
-            ctx.shadowColor=this.color;
-            ctx.fillStyle=this.color;
+        else if (currentTheme === "electric") {
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = this.color;
+            ctx.fillStyle = this.color;
             ctx.beginPath();
-            ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
-            ctx.shadowBlur=0;
+            ctx.shadowBlur = 0;
         }
 
-        else if(currentTheme==="ghost"){
-            ctx.shadowBlur=25;
-            ctx.shadowColor="white";
-            ctx.fillStyle=this.color;
+        else if (currentTheme === "ghost") {
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = "white";
+            ctx.fillStyle = this.color;
             ctx.beginPath();
-            ctx.arc(this.x,this.y,this.size*1.5,0,Math.PI*2);
+            ctx.arc(this.x, this.y, this.size * 1.6, 0, Math.PI * 2);
             ctx.fill();
-            ctx.shadowBlur=0;
+            ctx.shadowBlur = 0;
         }
 
         else {
-            ctx.fillStyle=this.color;
+            ctx.fillStyle = this.color;
             ctx.beginPath();
-            ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 }
 
-function changeTheme(t,btn){
-    currentTheme=t;
-    document.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
+function changeTheme(t, btn) {
+    currentTheme = t;
+    document.querySelectorAll("button").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    particles=[];
+    particles = [];
 }
 
-addEventListener("mousedown",()=>isPressing=true);
-addEventListener("mouseup",()=>isPressing=false);
-addEventListener("mousemove",e=>{
-    mouse.x=e.x; mouse.y=e.y;
-    if(particles.length<300) particles.push(new Particle(e.x,e.y));
+addEventListener("mousedown", () => isPressing = true);
+addEventListener("mouseup", () => isPressing = false);
+addEventListener("mousemove", e => {
+    mouse.x = e.x;
+    mouse.y = e.y;
+    if (particles.length < 300) particles.push(new Particle(e.x, e.y));
 });
 
-function animate(){
+function animate() {
     frames++;
-    ctx.fillStyle="rgba(0,0,0,0.2)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    particles.forEach((p,i)=>{
+    particles.forEach((p, i) => {
         p.update();
         p.draw();
-        if(p.life<=0) particles.splice(i,1);
+        if (p.life <= 0) particles.splice(i, 1);
     });
+
     requestAnimationFrame(animate);
 }
 animate();
