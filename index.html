@@ -17,7 +17,6 @@ html,body{
 }
 canvas{display:block}
 
-/* UI */
 #ui{
     position:absolute;
     top:20px;
@@ -30,7 +29,6 @@ canvas{display:block}
     color:#00ffcc;
 }
 
-/* Menu */
 .menu{
     position:absolute;
     bottom:40px;
@@ -53,7 +51,6 @@ button.active,button:hover{
     color:black;
 }
 
-/* Game overlay */
 .gameOverlay{
     position:absolute;
     inset:0;
@@ -120,6 +117,18 @@ addEventListener("mousemove",e=>{mouse.x=e.x;mouse.y=e.y});
 addEventListener("mousedown",()=>isPressing=true);
 addEventListener("mouseup",()=>isPressing=false);
 
+/* SCREEN SHAKE */
+let shake=0;
+function applyShake(){
+    if(shake>0){
+        ctx.translate(
+            (Math.random()-.5)*shake,
+            (Math.random()-.5)*shake
+        );
+        shake*=0.9;
+    }
+}
+
 /* VISUAL MODE (UNCHANGED) */
 let particles=[];
 let currentTheme="space";
@@ -167,7 +176,7 @@ class Particle{
     }
 }
 
-/* ================= GAME MODE (ONLY ADDITIONS HERE) ================= */
+/* ================= GAME MODE ================= */
 
 class Player{
     constructor(){
@@ -192,9 +201,10 @@ class Enemy{
         this.boss=boss;
         this.x=Math.random()*canvas.width;
         this.y=Math.random()*canvas.height;
-        this.r=boss?26:10;
-        this.speed=boss?2.2:Math.random()*1.5+1;
-        this.hp=boss?2:1;
+        this.r=boss?28:10;
+        this.baseSpeed=boss?2.1:Math.random()*1.5+1;
+        this.speed=this.baseSpeed;
+        this.rage=0;
     }
     update(){
         let dx=player.x-this.x;
@@ -202,12 +212,41 @@ class Enemy{
         let d=Math.hypot(dx,dy)||1;
         this.x+=dx/d*this.speed;
         this.y+=dy/d*this.speed;
+
+        if(isPressing){
+            let sx=this.x-mouse.x;
+            let sy=this.y-mouse.y;
+            let sd=Math.hypot(sx,sy)||1;
+            if(sd<140){
+                this.x+=(sx/sd)*6;
+                this.y+=(sy/sd)*6;
+
+                if(this.boss){
+                    shake=12;              // 💥 SCREEN SHAKE
+                    this.rage=1;           // 😡 RAGE MODE
+                }
+            }
+        }
+
+        if(this.boss && this.rage>0){
+            this.speed=this.baseSpeed*2;
+            this.rage-=0.02;
+        } else {
+            this.speed=this.baseSpeed;
+        }
     }
     draw(){
-        ctx.fillStyle=this.boss?"#ff00ff":"#ff0044";
+        ctx.shadowBlur=this.boss?40:20;
+        ctx.shadowColor=this.boss
+            ?`hsl(${Date.now()*0.2%360},100%,60%)`
+            :"#ff0044";
+        ctx.fillStyle=this.boss
+            ?`hsl(${Date.now()*0.2%360},100%,60%)`
+            :"#ff0044";
         ctx.beginPath();
         ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
         ctx.fill();
+        ctx.shadowBlur=0;
     }
 }
 
@@ -250,8 +289,10 @@ function changeTheme(t,btn){
     themeLabel.innerText="THEME: "+t.toUpperCase();
 }
 
-/* LOOP */
 function animate(){
+    ctx.save();
+    applyShake();
+
     ctx.fillStyle="rgba(0,0,0,.3)";
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
@@ -274,14 +315,14 @@ function animate(){
         }
 
         if(bossTimer>1800){
-            enemies.push(new Enemy(true)); // 👹 BOSS
+            enemies.push(new Enemy(true));
             bossTimer=0;
         }
 
         player.update();
         player.draw();
 
-        enemies.forEach((e,i)=>{
+        enemies.forEach(e=>{
             e.update();
             e.draw();
             if(Math.hypot(e.x-player.x,e.y-player.y)<e.r+player.r){
@@ -290,10 +331,10 @@ function animate(){
         });
     }
 
+    ctx.restore();
     requestAnimationFrame(animate);
 }
 animate();
 </script>
 </body>
 </html>
-
