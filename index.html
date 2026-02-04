@@ -1,3 +1,10 @@
+<think>
+First, the user wants the complete code incorporating three specific modifications:
+
+
+## Addressing User Code Modifications  
+- The user requested complete code with three specific modifications.
+</think>```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,8 +21,8 @@
         }
         .menu { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 100; }
         button { 
-            padding: 10px 15px; border: 1px solid #00ffcc; background: rgba(0,0,0,0.8); color: white; 
-            cursor: pointer; border-radius: 5px; font-size: 11px; transition: 0.2s;
+            padding: 12px 18px; border: 1px solid #00ffcc; background: rgba(0,0,0,0.8); color: white; 
+            cursor: pointer; border-radius: 5px; font-size: 14px; transition: 0.2s;
         }
         button:hover { background: #00ffcc; color: #000; }
         .active { background: #00ffcc; color: #000; box-shadow: 0 0 20px rgba(0,255,204,0.5); }
@@ -35,6 +42,7 @@
         <button onclick="changeTheme('lava', this)">LAVA</button>
         <button onclick="changeTheme('electric', this)">ELECTRIC</button>
         <button onclick="changeTheme('ghost', this)">GHOST</button>
+        <button onclick="particles = []; playSound(300, 'sine', 0.1, 0.3);">RESET</button>
     </div>
 
     <canvas id="canvas"></canvas>
@@ -45,6 +53,8 @@
     let particles = [];
     let currentTheme = 'space';
     let isPressing = false;
+    let maxParticles = 300;  // Particle limit for performance
+    let frameCount = 0;      // For frame skipping
     const mouse = { x: window.innerWidth/2, y: window.innerHeight/2 };
 
     // AUDIO SYSTEM
@@ -52,7 +62,13 @@
     let audioCtx;
 
     function initAudio() {
-        if (!audioCtx) audioCtx = new AudioCtx();
+        if (!audioCtx) {
+            try {
+                audioCtx = new AudioCtx();
+            } catch (e) {
+                console.log('Audio not supported');
+            }
+        }
     }
 
     function playSound(freq, type, vol, duration) {
@@ -72,6 +88,7 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
+    // Mouse and Touch Events
     window.addEventListener('mousedown', () => {
         initAudio();
         isPressing = true;
@@ -80,10 +97,27 @@
     window.addEventListener('mouseup', () => isPressing = false);
     window.addEventListener('mousemove', (e) => {
         mouse.x = e.x; mouse.y = e.y;
-        if (particles.length < 200) {
+        if (particles.length < maxParticles) {
             spawn(e.x, e.y);
             if (Math.random() > 0.95) playSound(400 + Math.random() * 1000, 'sine', 0.02, 0.1);
         }
+    });
+
+    // Touch Support
+    window.addEventListener('touchstart', (e) => {
+        initAudio();
+        isPressing = true;
+        playSound(100, 'sawtooth', 0.1, 0.5);
+        e.preventDefault();
+    });
+    window.addEventListener('touchend', () => isPressing = false);
+    window.addEventListener('touchmove', (e) => {
+        mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY;
+        if (particles.length < maxParticles) {
+            spawn(mouse.x, mouse.y);
+            if (Math.random() > 0.95) playSound(400 + Math.random() * 1000, 'sine', 0.02, 0.1);
+        }
+        e.preventDefault();
     });
 
     function changeTheme(t, btn) {
@@ -145,6 +179,35 @@
             this.x += this.vx;
             this.y += this.vy;
             this.life -= this.decay;
+
+            // Boundary wrapping for infinite space
+            if (this.x < 0) this.x = canvas.width;
+            if (this.x > canvas.width) this.x = 0;
+            if (this.y < 0) this.y = canvas.height;
+            if (this.y > canvas.height) this.y = 0;
+
+            // Collision Detection and Merging
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let other = particles[i];
+                if (other !== this) {
+                    let dx = this.x - other.x;
+                    let dy = this.y - other.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < this.size + other.size) {
+                        // Bounce effect
+                        this.vx = -this.vx * 0.8;
+                        this.vy = -this.vy * 0.8;
+                        other.vx = -other.vx * 0.8;
+                        other.vy = -other.vy * 0.8;
+                        // Merging for electric theme
+                        if (currentTheme === 'electric' && !this.isChild && !other.isChild) {
+                            this.size += other.size * 0.5;
+                            particles.splice(i, 1);
+                            playSound(800, 'sawtooth', 0.05, 0.2);  // Zap sound
+                        }
+                    }
+                }
+            }
         }
 
         draw() {
@@ -177,7 +240,9 @@
     }
 
     function spawn(x, y) {
-        particles.push(new Particle(x, y));
+        if (particles.length < maxParticles) {
+            particles.push(new Particle(x, y));
+        }
     }
 
     function drawNeural() {
@@ -203,7 +268,11 @@
         ctx.fillStyle = "rgba(0,0,0,0.2)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        drawNeural();
+        // Frame skipping for performance
+        frameCount++;
+        if (frameCount % 2 === 0) {
+            drawNeural();
+        }
 
         for (let i = 0; i < particles.length; i++) {
             particles[i].update();
@@ -225,3 +294,4 @@
 </script>
 </body>
 </html>
+```
