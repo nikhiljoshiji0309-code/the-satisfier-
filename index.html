@@ -85,6 +85,7 @@ button.active,button:hover{
     <h2 id="themeLabel">THEME: SPACE</h2>
     <p>MOVE • CLICK = SHOCKWAVE</p>
     <p id="scoreUI"></p>
+    <p id="bestUI"></p>
 </div>
 
 <div class="menu">
@@ -98,6 +99,7 @@ button.active,button:hover{
 <div class="gameOverlay" id="gameOver">
     <h1>⚡ GAME OVER</h1>
     <p id="scoreText"></p>
+    <p id="bestText"></p>
     <button onclick="startGame()">RESTART</button>
 </div>
 
@@ -111,14 +113,14 @@ const ctx=canvas.getContext("2d");
 resize();addEventListener("resize",resize);
 function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
 
-/* ================= INPUT ================= */
+/* INPUT */
 let mouse={x:innerWidth/2,y:innerHeight/2};
 let isPressing=false;
 addEventListener("mousemove",e=>{mouse.x=e.x;mouse.y=e.y});
 addEventListener("mousedown",()=>isPressing=true);
 addEventListener("mouseup",()=>isPressing=false);
 
-/* ================= VISUAL MODE (UNCHANGED) ================= */
+/* VISUAL MODE (UNCHANGED) */
 let particles=[];
 let currentTheme="space";
 let gameMode=false;
@@ -132,31 +134,23 @@ const themeColors={
 
 class Particle{
     constructor(x,y){
-        this.x=x;
-        this.y=y;
+        this.x=x;this.y=y;
         this.size=Math.random()*6+4;
         this.vx=Math.random()*4-2;
         this.vy=Math.random()*4-2;
     }
     update(){
         if(gameMode) return;
-
         let dx=mouse.x-this.x;
         let dy=mouse.y-this.y;
         let d=Math.hypot(dx,dy)||1;
         this.vx+=dx/d*.02;
         this.vy+=dy/d*.02;
-
-        if(isPressing){
-            if(d<120){
-                this.vx-=dx/d*3;
-                this.vy-=dy/d*3;
-            }
+        if(isPressing && d<120){
+            this.vx-=dx/d*3;
+            this.vy-=dy/d*3;
         }
-
-        this.x+=this.vx;
-        this.y+=this.vy;
-
+        this.x+=this.vx;this.y+=this.vy;
         if(this.x<0)this.x=canvas.width;
         if(this.x>canvas.width)this.x=0;
         if(this.y<0)this.y=canvas.height;
@@ -173,7 +167,8 @@ class Particle{
     }
 }
 
-/* ================= GAME MODE (NEW) ================= */
+/* ================= GAME MODE (ONLY ADDITIONS HERE) ================= */
+
 class Player{
     constructor(){
         this.x=mouse.x;
@@ -193,11 +188,13 @@ class Player{
 }
 
 class Enemy{
-    constructor(){
+    constructor(boss=false){
+        this.boss=boss;
         this.x=Math.random()*canvas.width;
         this.y=Math.random()*canvas.height;
-        this.r=10;
-        this.speed=Math.random()*1.5+1;
+        this.r=boss?26:10;
+        this.speed=boss?2.2:Math.random()*1.5+1;
+        this.hp=boss?2:1;
     }
     update(){
         let dx=player.x-this.x;
@@ -207,7 +204,7 @@ class Enemy{
         this.y+=dy/d*this.speed;
     }
     draw(){
-        ctx.fillStyle="#ff0044";
+        ctx.fillStyle=this.boss?"#ff00ff":"#ff0044";
         ctx.beginPath();
         ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
         ctx.fill();
@@ -218,6 +215,8 @@ let player;
 let enemies=[];
 let score=0;
 let spawnTimer=0;
+let bossTimer=0;
+let bestScore=localStorage.getItem("bestScore")||0;
 
 function startGame(){
     gameMode=true;
@@ -227,13 +226,18 @@ function startGame(){
     player=new Player();
     score=0;
     spawnTimer=0;
+    bossTimer=0;
     document.getElementById("gameOver").style.display="none";
 }
 
 function endGame(){
     gameMode=false;
-    document.getElementById("scoreText").innerText=
-        `You survived ${Math.floor(score)} seconds`;
+    if(score>bestScore){
+        bestScore=Math.floor(score);
+        localStorage.setItem("bestScore",bestScore);
+    }
+    scoreText.innerText=`Survived: ${Math.floor(score)} sec`;
+    bestText.innerText=`Best: ${bestScore} sec`;
     document.getElementById("gameOver").style.display="flex";
 }
 
@@ -243,10 +247,10 @@ function changeTheme(t,btn){
     particles=[];
     document.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
-    document.getElementById("themeLabel").innerText="THEME: "+t.toUpperCase();
+    themeLabel.innerText="THEME: "+t.toUpperCase();
 }
 
-/* ================= LOOP ================= */
+/* LOOP */
 function animate(){
     ctx.fillStyle="rgba(0,0,0,.3)";
     ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -258,19 +262,26 @@ function animate(){
 
     if(gameMode){
         score+=0.016;
-        document.getElementById("scoreUI").innerText=
-            "TIME: "+Math.floor(score);
+        scoreUI.innerText=`TIME: ${Math.floor(score)}`;
+        bestUI.innerText=`BEST: ${bestScore}`;
 
         spawnTimer++;
+        bossTimer++;
+
         if(spawnTimer>40){
             enemies.push(new Enemy());
             spawnTimer=0;
         }
 
+        if(bossTimer>1800){
+            enemies.push(new Enemy(true)); // 👹 BOSS
+            bossTimer=0;
+        }
+
         player.update();
         player.draw();
 
-        enemies.forEach(e=>{
+        enemies.forEach((e,i)=>{
             e.update();
             e.draw();
             if(Math.hypot(e.x-player.x,e.y-player.y)<e.r+player.r){
