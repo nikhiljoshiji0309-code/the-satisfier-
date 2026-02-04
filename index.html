@@ -2,265 +2,275 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Nikjosh0309 - Living Universe</title>
-
+<title>Electric Survival — Living Universe</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body, html {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #050505;
-    font-family: 'Arial Black', sans-serif;
+html,body{
+    margin:0;padding:0;overflow:hidden;
+    background:#02020a;
+    font-family:Arial Black,sans-serif;
+    color:white;
 }
-canvas { display: block; }
+canvas{display:block}
 
-#ui {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    color: white;
-    z-index: 100;
+/* HUD */
+#hud{
+    position:fixed;
+    top:12px;left:12px;
+    z-index:10;
+    font-size:14px;
+    color:#00ffff;
 }
+#hud span{display:block;margin-bottom:5px}
 
-.menu {
-    position: absolute;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    z-index: 100;
+/* Screens */
+.overlay{
+    position:fixed;inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:radial-gradient(circle,#000 0%,#02020a 70%);
+    z-index:20;
 }
+.hidden{display:none}
 
-button {
-    padding: 12px 18px;
-    border: 1px solid #00ffcc;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    cursor: pointer;
-    border-radius: 5px;
+.panel{
+    border:1px solid #00ffff;
+    padding:24px;
+    background:rgba(0,0,0,0.7);
+    max-width:340px;
+    text-align:center;
 }
-
-button:hover, .active {
-    background: #00ffcc;
-    color: black;
+.panel h1{margin:0 0 10px;color:#00ffff}
+.panel p{font-size:12px;opacity:.85}
+.panel button{
+    margin-top:15px;
+    padding:10px 18px;
+    border:1px solid #00ffff;
+    background:transparent;
+    color:#00ffff;
+    cursor:pointer;
 }
-
-.gameOverlay {
-    position: absolute;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    background: rgba(0,0,0,0.8);
-    color: #00ffcc;
-    z-index: 200;
-    text-align: center;
-}
-
-.copyright {
-    position: absolute;
-    bottom: 10px;
-    right: 15px;
-    font-size: 11px;
-    opacity: 0.5;
-    letter-spacing: 2px;
-    color: #00ffcc;
-}
+.panel button:hover{background:#00ffff;color:#000}
 </style>
 </head>
 
 <body>
+<canvas id="c"></canvas>
 
-<div id="ui">
-    <h2 id="themeLabel">THEME: SPACE</h2>
-    <p style="font-size:11px;color:#00ffcc">MOVE • CLICK = SHOCKWAVE</p>
+<div id="hud">
+    <span>⚡ SCORE: <b id="score">0</b></span>
+    <span>🏆 BEST: <b id="best">0</b></span>
+    <span id="status"></span>
 </div>
 
-<div class="menu">
-    <button onclick="changeTheme('space',this)" class="active">SPACE</button>
-    <button onclick="changeTheme('lava',this)">LAVA</button>
-    <button onclick="changeTheme('electric',this)">ELECTRIC</button>
-    <button onclick="changeTheme('ghost',this)">GHOST</button>
-    <button onclick="startGame()">GAME</button>
+<div id="start" class="overlay">
+    <div class="panel">
+        <h1>ELECTRIC SURVIVAL</h1>
+        <p>
+            You are a sentient energy core.<br><br>
+            ⚪ Chasers hunt you<br>
+            🔴 Speeders rush you<br>
+            🟣 Orbiters trap you<br><br>
+            Collect power-ups.<br>
+            One hit = collapse.
+        </p>
+        <button onclick="startGame()">⚡ ENTER</button>
+    </div>
 </div>
 
-<div class="gameOverlay" id="gameOver">
-    <h1>⚡ GAME OVER</h1>
-    <p id="scoreText"></p>
-    <button onclick="startGame()">RESTART</button>
+<div id="gameover" class="overlay hidden">
+    <div class="panel">
+        <h1>CORE DESTROYED</h1>
+        <p id="finalScore"></p>
+        <button onclick="restart()">RESTART</button>
+    </div>
 </div>
-
-<div class="copyright">ENGINE BY: nikjosh0309</div>
-
-<canvas id="canvas"></canvas>
 
 <script>
-const canvas = document.getElementById("canvas");
+const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
-canvas.width = innerWidth;
-canvas.height = innerHeight;
+resize(); window.addEventListener("resize",resize);
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
 
-let particles = [];
-let currentTheme = "space";
-let isPressing = false;
-let mouse = { x: innerWidth/2, y: innerHeight/2 };
-
-// GAME STATE
-let gameMode = false;
-let player, score = 0, spawnRate = 60;
-
-class Player {
-    constructor() {
-        this.x = mouse.x;
-        this.y = mouse.y;
-        this.radius = 14;
-    }
-    update() {
-        this.x += (mouse.x - this.x) * 0.15;
-        this.y += (mouse.y - this.y) * 0.15;
-    }
-    draw() {
-        ctx.shadowBlur = 30;
-        ctx.shadowColor = "#00ffff";
-        ctx.fillStyle = "#00ffff";
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-    }
+/* AUDIO */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audio = new AudioCtx();
+function sound(f,t="sawtooth",v=0.08,d=0.15){
+    const o=audio.createOscillator(),g=audio.createGain();
+    o.type=t;o.frequency.value=f;g.gain.value=v;
+    g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+d);
+    o.connect(g);g.connect(audio.destination);
+    o.start();o.stop(audio.currentTime+d);
 }
 
-class Particle {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.size = Math.random()*6+4;
-        this.vx = Math.random()*4-2;
-        this.vy = Math.random()*4-2;
-    }
+/* GAME STATE */
+let running=false;
+let enemies=[], powerups=[];
+let score=0;
+let best=localStorage.getItem("best")||0;
+document.getElementById("best").textContent=best;
 
-    update() {
-        if (gameMode) {
-            // ENEMY AI 🧠
-            let dx = player.x - this.x;
-            let dy = player.y - this.y;
-            let d = Math.hypot(dx, dy) || 1;
-            this.vx += (dx/d)*0.15;
-            this.vy += (dy/d)*0.15;
-        }
+const player={x:innerWidth/2,y:innerHeight/2,r:10};
+let difficulty=1;
+let shield=false;
+let slowTime=0;
 
-        if (isPressing) {
-            // SHOCKWAVE
-            let dx = this.x - mouse.x;
-            let dy = this.y - mouse.y;
-            let d = Math.hypot(dx, dy) || 1;
-            if (d < 120) {
-                this.vx += (dx/d)*3;
-                this.vy += (dy/d)*3;
-            }
-        }
+/* INPUT */
+window.addEventListener("mousemove",e=>{player.x=e.clientX;player.y=e.clientY});
+window.addEventListener("touchmove",e=>{
+    player.x=e.touches[0].clientX;
+    player.y=e.touches[0].clientY;
+},{passive:false});
+window.addEventListener("mousedown",shockwave);
+window.addEventListener("touchstart",shockwave);
 
-        this.x += this.vx;
-        this.y += this.vy;
-
-        if (this.x < 0) this.x = canvas.width;
-        if (this.x > canvas.width) this.x = 0;
-        if (this.y < 0) this.y = canvas.height;
-        if (this.y > canvas.height) this.y = 0;
-    }
-
-    draw() {
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = "#00ffff";
-        ctx.fillStyle = "#00ffff";
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-    }
+function shockwave(){
+    if(!running)return;
+    sound(120,"square",0.12,0.2);
+    enemies.forEach(e=>{
+        const dx=e.x-player.x,dy=e.y-player.y;
+        const d=Math.hypot(dx,dy)||1;
+        e.vx+=dx/d*5;
+        e.vy+=dy/d*5;
+    });
 }
 
-function startGame() {
-    gameMode = true;
-    currentTheme = "electric";
-    particles = [];
-    player = new Player();
-    score = 0;
-    spawnRate = 60;
-    document.getElementById("gameOver").style.display = "none";
+/* ENEMY SPAWN */
+function spawnEnemy(){
+    const type=Math.random();
+    let e={x:0,y:0,vx:0,vy:0,r:6,type:"chaser"};
+    const edge=Math.floor(Math.random()*4);
+    if(edge===0){e.x=0;e.y=Math.random()*canvas.height}
+    if(edge===1){e.x=canvas.width;e.y=Math.random()*canvas.height}
+    if(edge===2){e.x=Math.random()*canvas.width;e.y=0}
+    if(edge===3){e.x=Math.random()*canvas.width;e.y=canvas.height}
+
+    if(type>0.7)e.type="orbiter";
+    else if(type>0.4)e.type="speeder";
+
+    enemies.push(e);
 }
 
-function endGame() {
-    gameMode = false;
-    document.getElementById("scoreText").innerText =
-        `You survived ${Math.floor(score)} seconds`;
-    document.getElementById("gameOver").style.display = "flex";
+/* POWERUPS */
+function spawnPower(){
+    const types=["shield","slow","burst"];
+    powerups.push({
+        x:Math.random()*canvas.width,
+        y:Math.random()*canvas.height,
+        r:8,
+        type:types[Math.floor(Math.random()*3)]
+    });
 }
 
-function changeTheme(t, btn) {
-    gameMode = false;
-    currentTheme = t;
-    particles = [];
-    document.querySelectorAll("button").forEach(b => b.classList.remove("active"));
-    if (btn) btn.classList.add("active");
-}
+/* LOOP */
+function loop(){
+    if(!running)return;
 
-addEventListener("mousemove", e => {
-    mouse.x = e.x;
-    mouse.y = e.y;
-});
-
-addEventListener("mousedown", () => isPressing = true);
-addEventListener("mouseup", () => isPressing = false);
-
-function animate() {
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillStyle="rgba(0,0,25,0.35)";
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    if (gameMode) {
-        score += 0.016;
+    // Player
+    ctx.fillStyle=shield?"#00ff88":"#00ffff";
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+    ctx.fill();
 
-        if (Math.random() < 1/spawnRate) {
-            particles.push(new Particle(
-                Math.random()*canvas.width,
-                Math.random()*canvas.height
-            ));
-            spawnRate = Math.max(15, spawnRate - 0.5); // difficulty ↑
+    difficulty+=0.001;
+    if(Math.random()<0.02*difficulty)spawnEnemy();
+    if(Math.random()<0.002)spawnPower();
+
+    // Powerups
+    powerups.forEach((p,i)=>{
+        ctx.fillStyle=
+            p.type==="shield"?"#00ff88":
+            p.type==="slow"?"#0088ff":"#ffcc00";
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fill();
+
+        if(Math.hypot(p.x-player.x,p.y-player.y)<p.r+player.r){
+            sound(500,"sine",0.15,0.2);
+            if(p.type==="shield")shield=true;
+            if(p.type==="slow")slowTime=600;
+            if(p.type==="burst")shockwave();
+            powerups.splice(i,1);
+        }
+    });
+
+    // Enemies
+    for(let i=enemies.length-1;i>=0;i--){
+        const e=enemies[i];
+        const dx=player.x-e.x,dy=player.y-e.y;
+        const d=Math.hypot(dx,dy)||1;
+        let speed=0.06*difficulty;
+
+        if(e.type==="speeder")speed*=2;
+        if(e.type==="orbiter"){
+            e.vx+=(-dy/d)*0.15;
+            e.vy+=(dx/d)*0.15;
         }
 
-        player.update();
-        player.draw();
+        if(slowTime>0)speed*=0.4;
 
-        particles.forEach((p,i)=>{
-            p.update();
-            p.draw();
+        e.vx+=dx/d*speed;
+        e.vy+=dy/d*speed;
+        e.x+=e.vx;e.y+=e.vy;
 
-            // COLLISION ☠️
-            let dx = p.x - player.x;
-            let dy = p.y - player.y;
-            if (Math.hypot(dx,dy) < p.size + player.radius) {
-                endGame();
+        ctx.fillStyle=
+            e.type==="speeder"?"#ff4444":
+            e.type==="orbiter"?"#bb66ff":"#ffffff";
+        ctx.beginPath();
+        ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+        ctx.fill();
+
+        if(d<e.r+player.r){
+            if(shield){
+                shield=false;
+                sound(300,"square",0.2,0.3);
+                enemies.splice(i,1);
+            }else{
+                endGame();return;
             }
-        });
-
-        ctx.fillStyle = "#00ffcc";
-        ctx.fillText(`TIME: ${Math.floor(score)}`, 20, 80);
+        }
     }
 
-    else {
-        particles.forEach(p=>{
-            p.update();
-            p.draw();
-        });
-    }
+    if(slowTime>0)slowTime--;
+    document.getElementById("status").textContent=
+        shield?"🟢 SHIELD":slowTime>0?"🔵 SLOW":"";
 
-    requestAnimationFrame(animate);
+    score++;
+    document.getElementById("score").textContent=score;
+    requestAnimationFrame(loop);
 }
-animate();
+
+/* FLOW */
+function startGame(){
+    audio.resume();
+    document.getElementById("start").classList.add("hidden");
+    running=true;
+    sound(400,"sine",0.15,0.3);
+    loop();
+}
+function endGame(){
+    running=false;
+    sound(60,"sawtooth",0.2,0.5);
+    document.getElementById("gameover").classList.remove("hidden");
+    document.getElementById("finalScore").innerHTML=`Survived <b>${score}</b> cycles`;
+    if(score>best){
+        best=score;
+        localStorage.setItem("best",best);
+        document.getElementById("best").textContent=best;
+    }
+}
+function restart(){
+    enemies=[];powerups=[];
+    score=0;difficulty=1;
+    shield=false;slowTime=0;
+    document.getElementById("gameover").classList.add("hidden");
+    running=true;
+    loop();
+}
 </script>
 </body>
 </html>
