@@ -2,80 +2,93 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Electric Survival — Living Universe</title>
+<title>Living Universe ⚡</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 html,body{
     margin:0;padding:0;overflow:hidden;
-    background:#02020a;
+    background:#050505;
     font-family:Arial Black,sans-serif;
     color:white;
 }
 canvas{display:block}
 
-/* HUD */
-#hud{
+/* UI */
+#ui{
     position:fixed;
-    top:12px;left:12px;
+    top:15px;left:15px;
     z-index:10;
-    font-size:14px;
+    font-size:13px;
     color:#00ffff;
 }
-#hud span{display:block;margin-bottom:5px}
+#ui span{display:block;margin-bottom:6px}
 
-/* Screens */
-.overlay{
-    position:fixed;inset:0;
+.menu{
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
     display:flex;
-    align-items:center;
-    justify-content:center;
-    background:radial-gradient(circle,#000 0%,#02020a 70%);
-    z-index:20;
+    gap:8px;
+    z-index:10;
 }
-.hidden{display:none}
-
-.panel{
+button{
+    padding:10px 14px;
+    background:rgba(0,0,0,.7);
     border:1px solid #00ffff;
-    padding:24px;
-    background:rgba(0,0,0,0.7);
-    max-width:340px;
-    text-align:center;
-}
-.panel h1{margin:0 0 10px;color:#00ffff}
-.panel p{font-size:12px;opacity:.85}
-.panel button{
-    margin-top:15px;
-    padding:10px 18px;
-    border:1px solid #00ffff;
-    background:transparent;
     color:#00ffff;
     cursor:pointer;
 }
-.panel button:hover{background:#00ffff;color:#000}
+button.active,button:hover{
+    background:#00ffff;
+    color:#000;
+}
+
+/* Overlays */
+.overlay{
+    position:fixed;inset:0;
+    background:radial-gradient(circle,#000 0%,#050505 70%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:20;
+}
+.hidden{display:none}
+.panel{
+    border:1px solid #00ffff;
+    padding:24px;
+    background:rgba(0,0,0,.75);
+    text-align:center;
+    max-width:340px;
+}
+.panel h1{margin:0 0 10px;color:#00ffff}
+.panel p{font-size:12px;opacity:.85}
 </style>
 </head>
 
 <body>
 <canvas id="c"></canvas>
 
-<div id="hud">
-    <span>⚡ SCORE: <b id="score">0</b></span>
-    <span>🏆 BEST: <b id="best">0</b></span>
-    <span id="status"></span>
+<div id="ui">
+    <span id="modeLabel">MODE: VISUAL</span>
+    <span id="scoreUI"></span>
+    <span id="bestUI"></span>
 </div>
 
-<div id="start" class="overlay">
+<div class="menu">
+    <button id="visualBtn" class="active" onclick="setMode('visual')">VISUAL</button>
+    <button id="gameBtn" onclick="setMode('game')">GAME</button>
+</div>
+
+<div id="start" class="overlay hidden">
     <div class="panel">
         <h1>ELECTRIC SURVIVAL</h1>
         <p>
-            You are a sentient energy core.<br><br>
-            ⚪ Chasers hunt you<br>
-            🔴 Speeders rush you<br>
-            🟣 Orbiters trap you<br><br>
-            Collect power-ups.<br>
-            One hit = collapse.
+            Move to survive<br>
+            Click / Tap → Shockwave<br>
+            One hit = end
         </p>
-        <button onclick="startGame()">⚡ ENTER</button>
+        <button onclick="startGame()">START</button>
     </div>
 </div>
 
@@ -88,189 +101,178 @@ canvas{display:block}
 </div>
 
 <script>
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-resize(); window.addEventListener("resize",resize);
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d");
+resize();window.addEventListener("resize",resize);
 function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
 
-/* AUDIO */
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-const audio = new AudioCtx();
-function sound(f,t="sawtooth",v=0.08,d=0.15){
+/* ========= AUDIO SYSTEM ========= */
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+const audio=new AudioCtx();
+
+let visualMusic=null;
+let gameMusic=null;
+
+function startVisualMusic(){
+    stopMusic();
+    visualMusic=audio.createOscillator();
+    const g=audio.createGain();
+    visualMusic.type="sine";
+    visualMusic.frequency.value=80;
+    g.gain.value=0.03;
+    visualMusic.connect(g);
+    g.connect(audio.destination);
+    visualMusic.start();
+}
+
+function startGameMusic(){
+    stopMusic();
+    gameMusic=audio.createOscillator();
+    const g=audio.createGain();
+    gameMusic.type="sawtooth";
+    gameMusic.frequency.value=140;
+    g.gain.value=0.05;
+    gameMusic.connect(g);
+    g.connect(audio.destination);
+    gameMusic.start();
+}
+
+function stopMusic(){
+    if(visualMusic){visualMusic.stop();visualMusic=null}
+    if(gameMusic){gameMusic.stop();gameMusic=null}
+}
+
+function sfx(f,t="square",v=.08,d=.15){
     const o=audio.createOscillator(),g=audio.createGain();
     o.type=t;o.frequency.value=f;g.gain.value=v;
-    g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+d);
+    g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+d);
     o.connect(g);g.connect(audio.destination);
     o.start();o.stop(audio.currentTime+d);
 }
 
-/* GAME STATE */
+/* ========= MODE ========= */
+let mode="visual";
+function setMode(m){
+    audio.resume();
+    mode=m;
+    modeLabel.textContent="MODE: "+m.toUpperCase();
+    visualBtn.classList.toggle("active",m==="visual");
+    gameBtn.classList.toggle("active",m==="game");
+
+    if(m==="visual"){
+        startVisualMusic();
+        start.classList.add("hidden");
+    }
+    if(m==="game"){
+        stopMusic();
+        start.classList.remove("hidden");
+    }
+}
+
+/* ========= INPUT ========= */
+const mouse={x:innerWidth/2,y:innerHeight/2};
+window.addEventListener("mousemove",e=>{mouse.x=e.clientX;mouse.y=e.clientY});
+window.addEventListener("touchmove",e=>{
+    mouse.x=e.touches[0].clientX;
+    mouse.y=e.touches[0].clientY;
+},{passive:false});
+window.addEventListener("mousedown",()=>{audio.resume();sfx(120)});
+window.addEventListener("touchstart",()=>{audio.resume();sfx(120)});
+
+/* ========= VISUAL MODE ========= */
+let particles=[];
+class Particle{
+    constructor(x,y){
+        this.x=x;this.y=y;
+        this.vx=Math.random()*4-2;
+        this.vy=Math.random()*4-2;
+        this.life=1;
+        this.size=Math.random()*4+2;
+        this.color=`hsl(${Math.random()*360},100%,70%)`;
+    }
+    update(){
+        let dx=mouse.x-this.x,dy=mouse.y-this.y;
+        let d=Math.hypot(dx,dy)||1;
+        this.vx+=dx/d*.02;
+        this.vy+=dy/d*.02;
+        this.x+=this.vx;this.y+=this.vy;
+        this.life-=.006;
+        if(this.x<0)this.x=canvas.width;
+        if(this.x>canvas.width)this.x=0;
+        if(this.y<0)this.y=canvas.height;
+        if(this.y>canvas.height)this.y=0;
+    }
+    draw(){
+        ctx.globalAlpha=this.life;
+        ctx.fillStyle=this.color;
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+        ctx.fill();
+    }
+}
+
+/* ========= GAME MODE ========= */
 let running=false;
-let enemies=[], powerups=[];
+let enemies=[];
 let score=0;
 let best=localStorage.getItem("best")||0;
-document.getElementById("best").textContent=best;
+bestUI.textContent="🏆 BEST: "+best;
 
-const player={x:innerWidth/2,y:innerHeight/2,r:10};
-let difficulty=1;
-let shield=false;
-let slowTime=0;
-
-/* INPUT */
-window.addEventListener("mousemove",e=>{player.x=e.clientX;player.y=e.clientY});
-window.addEventListener("touchmove",e=>{
-    player.x=e.touches[0].clientX;
-    player.y=e.touches[0].clientY;
-},{passive:false});
-window.addEventListener("mousedown",shockwave);
-window.addEventListener("touchstart",shockwave);
-
-function shockwave(){
-    if(!running)return;
-    sound(120,"square",0.12,0.2);
-    enemies.forEach(e=>{
-        const dx=e.x-player.x,dy=e.y-player.y;
-        const d=Math.hypot(dx,dy)||1;
-        e.vx+=dx/d*5;
-        e.vy+=dy/d*5;
-    });
-}
-
-/* ENEMY SPAWN */
-function spawnEnemy(){
-    const type=Math.random();
-    let e={x:0,y:0,vx:0,vy:0,r:6,type:"chaser"};
-    const edge=Math.floor(Math.random()*4);
-    if(edge===0){e.x=0;e.y=Math.random()*canvas.height}
-    if(edge===1){e.x=canvas.width;e.y=Math.random()*canvas.height}
-    if(edge===2){e.x=Math.random()*canvas.width;e.y=0}
-    if(edge===3){e.x=Math.random()*canvas.width;e.y=canvas.height}
-
-    if(type>0.7)e.type="orbiter";
-    else if(type>0.4)e.type="speeder";
-
-    enemies.push(e);
-}
-
-/* POWERUPS */
-function spawnPower(){
-    const types=["shield","slow","burst"];
-    powerups.push({
-        x:Math.random()*canvas.width,
-        y:Math.random()*canvas.height,
-        r:8,
-        type:types[Math.floor(Math.random()*3)]
-    });
-}
-
-/* LOOP */
-function loop(){
-    if(!running)return;
-
-    ctx.fillStyle="rgba(0,0,25,0.35)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // Player
-    ctx.fillStyle=shield?"#00ff88":"#00ffff";
-    ctx.beginPath();
-    ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
-    ctx.fill();
-
-    difficulty+=0.001;
-    if(Math.random()<0.02*difficulty)spawnEnemy();
-    if(Math.random()<0.002)spawnPower();
-
-    // Powerups
-    powerups.forEach((p,i)=>{
-        ctx.fillStyle=
-            p.type==="shield"?"#00ff88":
-            p.type==="slow"?"#0088ff":"#ffcc00";
-        ctx.beginPath();
-        ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
-        ctx.fill();
-
-        if(Math.hypot(p.x-player.x,p.y-player.y)<p.r+player.r){
-            sound(500,"sine",0.15,0.2);
-            if(p.type==="shield")shield=true;
-            if(p.type==="slow")slowTime=600;
-            if(p.type==="burst")shockwave();
-            powerups.splice(i,1);
-        }
-    });
-
-    // Enemies
-    for(let i=enemies.length-1;i>=0;i--){
-        const e=enemies[i];
-        const dx=player.x-e.x,dy=player.y-e.y;
-        const d=Math.hypot(dx,dy)||1;
-        let speed=0.06*difficulty;
-
-        if(e.type==="speeder")speed*=2;
-        if(e.type==="orbiter"){
-            e.vx+=(-dy/d)*0.15;
-            e.vy+=(dx/d)*0.15;
-        }
-
-        if(slowTime>0)speed*=0.4;
-
-        e.vx+=dx/d*speed;
-        e.vy+=dy/d*speed;
-        e.x+=e.vx;e.y+=e.vy;
-
-        ctx.fillStyle=
-            e.type==="speeder"?"#ff4444":
-            e.type==="orbiter"?"#bb66ff":"#ffffff";
-        ctx.beginPath();
-        ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
-        ctx.fill();
-
-        if(d<e.r+player.r){
-            if(shield){
-                shield=false;
-                sound(300,"square",0.2,0.3);
-                enemies.splice(i,1);
-            }else{
-                endGame();return;
-            }
-        }
-    }
-
-    if(slowTime>0)slowTime--;
-    document.getElementById("status").textContent=
-        shield?"🟢 SHIELD":slowTime>0?"🔵 SLOW":"";
-
-    score++;
-    document.getElementById("score").textContent=score;
-    requestAnimationFrame(loop);
-}
-
-/* FLOW */
 function startGame(){
     audio.resume();
-    document.getElementById("start").classList.add("hidden");
+    startGameMusic();
+    start.classList.add("hidden");
     running=true;
-    sound(400,"sine",0.15,0.3);
-    loop();
+    score=0;
 }
+
 function endGame(){
     running=false;
-    sound(60,"sawtooth",0.2,0.5);
-    document.getElementById("gameover").classList.remove("hidden");
-    document.getElementById("finalScore").innerHTML=`Survived <b>${score}</b> cycles`;
+    stopMusic();
+    gameover.classList.remove("hidden");
+    finalScore.innerHTML=`Score: <b>${score}</b>`;
     if(score>best){
         best=score;
         localStorage.setItem("best",best);
-        document.getElementById("best").textContent=best;
+        bestUI.textContent="🏆 BEST: "+best;
     }
 }
+
 function restart(){
-    enemies=[];powerups=[];
-    score=0;difficulty=1;
-    shield=false;slowTime=0;
-    document.getElementById("gameover").classList.add("hidden");
-    running=true;
-    loop();
+    enemies=[];
+    gameover.classList.add("hidden");
+    startGame();
 }
+
+/* ========= LOOP ========= */
+function loop(){
+    ctx.fillStyle="rgba(0,0,25,.3)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    if(mode==="visual"){
+        if(Math.random()<.35)particles.push(new Particle(mouse.x,mouse.y));
+        particles.forEach((p,i)=>{
+            p.update();p.draw();
+            if(p.life<=0)particles.splice(i,1);
+        });
+    }
+
+    if(mode==="game" && running){
+        score++;
+        scoreUI.textContent="⚡ SCORE: "+score;
+
+        ctx.fillStyle="#00ffff";
+        ctx.beginPath();
+        ctx.arc(mouse.x,mouse.y,10,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    requestAnimationFrame(loop);
+}
+loop();
+
+/* Auto-start visual music after first interaction */
+window.addEventListener("click",()=>startVisualMusic(),{once:true});
 </script>
 </body>
 </html>
